@@ -1,0 +1,17 @@
+{
+  "name": "batch-requests-per-second",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "abhiram",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.3.4",
+    "csv": "^6.2.8",
+    "csv-parse": "^5.3.6",
+    "csv-stringify": "^6.3.0"
+  }
+}
