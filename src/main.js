@@ -1,99 +1,101 @@
 const axios = require('axios');
+const {parse} = require('csv-parse');
+const {stringify} = require('csv-stringify');
+const fs = require('fs');
 
-let data = [];
-async function generateDummyData(numRecords) {
+let changedUsers = [];
+
+async function getChangedValues() {
+
+  fs.readFile('./assets/yesterday_users.csv', 'utf8', (err, yesterdayData) => {
+    if (err) throw err;
   
-    // Define arrays of possible values for each attribute
-    const storeIds = [...Array(numRecords).keys()].map(i => `Store ${i+1}`);
-    const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'];
-    const states = ['New York', 'California', 'Illinois', 'Texas', 'Arizona','Tempe', 'Mussori'];
-    const provinces = ['Ontario', 'Quebec', 'British Columbia', 'Alberta', 'Manitoba'];
-    const pincodes = [...Array(numRecords).keys()].map(i => `10100${i+1}`.slice(-5));
+    parse(yesterdayData, { columns: true }, (err, yesterdayUsers) => {
+      if (err) throw err;
   
-    // Generate random records with the specified attributes
-    for (let i = 0; i < numRecords; i++) {
-      const record = {
-        storeId: storeIds[i],
-        city: cities[Math.floor(Math.random() * cities.length)],
-        state: states[Math.floor(Math.random() * states.length)],
-        province: provinces[Math.floor(Math.random() * provinces.length)],
-        pincode: pincodes[i],
-      };
-      data.push(record);
-    }
+      fs.readFile('./assets/today_users.csv', 'utf8', (err, todayData) => {
+        if (err) throw err;
   
-    return data;
-  }
+        parse(todayData, { columns: true }, (err, todayUsers) => {
+          if (err) throw err;
   
-async function getData() {
-    data = await generateDummyData(5000)
+          for (let i = 0; i < todayUsers.length; i++) {
+            const todayUser = todayUsers[i];
+            const yesterdayUser = yesterdayUsers.find(
+              (user) => user.storeId === todayUser.storeId
+            );
+            if (
+              !yesterdayUser ||
+              todayUser.city !== yesterdayUser.city ||
+              todayUser.state !== yesterdayUser.state ||
+              todayUser.province !== yesterdayUser.province ||
+              todayUser.pincode !== yesterdayUser.pincode
+            ) {
+              changedUsers.push(todayUser);
+            }
+          }
+          
+          console.log(changedUsers);
+  
+          stringify(changedUsers, { header: true }, (err, output) => {
+            if (err) throw err;
+            fs.writeFile('./assets/changed_values.csv', output, (err) => {
+              if (err) throw err;
+              console.log('The file has been saved!');
+            });
+          });
+        });
+      });
+    });
+  });
 }
-getData();
-console.log(data);
 
+getChangedValues();
 
-// ----------------------------------------------------------------------------- //
-
-
-// Define the number of records per batch
 const BATCH_SIZE = 100;
 
-// Define the maximum number of requests per second
 const MAX_REQUESTS_PER_SECOND = 5;
 
-// Define the token bucket
 let tokenBucket = MAX_REQUESTS_PER_SECOND;
 
-// Define the function to send a batch of records to the API
 async function sendBatchToAPI(batch) {
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    };
-  
-    const url = 'https://reqres.in/api/users';
-  
-    try {
-      const response = await axios.post(url,{
-        ...config,
-        body:  batch,
-      });
-      console.log(response.data);
-    } catch (error) {
-      console.error(error);
+  const config = {
+    headers: {
+      'Content-Type': 'application/json',
     }
+  };
+  
+  const url = 'https://reqres.in/api/users';
+
+  try {
+    const response = await axios.post(url,{
+      ...config,
+      body:  batch,
+    });
+    console.log(response.data);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
-// Define the function to send records from an array to the API with rate limiting
 async function sendRecordsToAPI(records) {
-  // Divide the array of records into batches
-  const numBatches = Math.ceil(records.length / BATCH_SIZE); //100 batches ---> 10000/100
+  const numBatches = Math.ceil(records.length / BATCH_SIZE);
   const batches = [];
 
   for (let i = 0; i < numBatches; i++) {
     const start = i * BATCH_SIZE;
     const end = Math.min((i + 1) * BATCH_SIZE, records.length);
-    batches.push(records.slice(start, end)); //pushing 100 records as a batch into batches array
+    batches.push(records.slice(start, end));
   }
 
-  //batches array is an array of arrays where each array is considered as a batch of 100 items.
-
-  // Send each batch of records to the API with rate limiting
   for (let i = 0; i < batches.length; i++) {
-    // Wait until there are enough tokens in the token bucket
     while (tokenBucket < 1) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       tokenBucket += MAX_REQUESTS_PER_SECOND;
     }
-
-    // Send the batch to the API
     await sendBatchToAPI(batches[i]);
-
-    // Decrement the token count in the token bucket
     tokenBucket -= 1;
   }
 }
 
-// Call the function with the array of records
-sendRecordsToAPI(data);
+sendRecordsToAPI(changedUsers);
