@@ -4,59 +4,11 @@ const {stringify} = require('csv-stringify');
 const fs = require('fs');
 
 let changedUsers = [];
-
-async function getChangedValues() {
-
-  fs.readFile('./assets/yesterday_users.csv', 'utf8', (err, yesterdayData) => {
-    if (err) throw err;
-  
-    parse(yesterdayData, { columns: true }, (err, yesterdayUsers) => {
-      if (err) throw err;
-  
-      fs.readFile('./assets/today_users.csv', 'utf8', (err, todayData) => {
-        if (err) throw err;
-  
-        parse(todayData, { columns: true }, (err, todayUsers) => {
-          if (err) throw err;
-  
-          for (let i = 0; i < todayUsers.length; i++) {
-            const todayUser = todayUsers[i];
-            const yesterdayUser = yesterdayUsers.find(
-              (user) => user.storeId === todayUser.storeId
-            );
-            if (
-              !yesterdayUser ||
-              todayUser.city !== yesterdayUser.city ||
-              todayUser.state !== yesterdayUser.state ||
-              todayUser.province !== yesterdayUser.province ||
-              todayUser.pincode !== yesterdayUser.pincode
-            ) {
-              changedUsers.push(todayUser);
-            }
-          }
-          
-          console.log(changedUsers);
-  
-          stringify(changedUsers, { header: true }, (err, output) => {
-            if (err) throw err;
-            fs.writeFile('./assets/changed_values.csv', output, (err) => {
-              if (err) throw err;
-              console.log('The file has been saved!');
-            });
-          });
-        });
-      });
-    });
-  });
-}
-
-getChangedValues();
-
 const BATCH_SIZE = 100;
-
 const MAX_REQUESTS_PER_SECOND = 5;
-
 let tokenBucket = MAX_REQUESTS_PER_SECOND;
+const yesterday_file = './assets/yesterday_users.csv';
+const todays_file = './assets/today_users.csv';
 
 async function sendBatchToAPI(batch) {
   const config = {
@@ -98,4 +50,50 @@ async function sendRecordsToAPI(records) {
   }
 }
 
-sendRecordsToAPI(changedUsers);
+async function main() {
+
+  fs.readFile(yesterday_file, 'utf8', (err, yesterdayData) => {
+    if (err) throw err;
+  
+    parse(yesterdayData, { columns: true }, (err, yesterdayUsers) => {
+      if (err) throw err;
+  
+      fs.readFile(todays_file, 'utf8', (err, todayData) => {
+        if (err) throw err;
+  
+        parse(todayData, { columns: true }, (err, todayUsers) => {
+          if (err) throw err;
+  
+          for (let i = 0; i < todayUsers.length; i++) {
+            const todayUser = todayUsers[i];
+            const yesterdayUser = yesterdayUsers.find(
+              (user) => user.storeId === todayUser.storeId
+            );
+            if (
+              !yesterdayUser ||
+              todayUser.city !== yesterdayUser.city ||
+              todayUser.state !== yesterdayUser.state ||
+              todayUser.province !== yesterdayUser.province ||
+              todayUser.pincode !== yesterdayUser.pincode
+            ) {
+              changedUsers.push(todayUser);
+            }
+          }
+  
+          stringify(changedUsers, { header: true }, (err, output) => {
+            if (err) throw err;
+            fs.writeFile('./assets/changed_values.csv', output, (err) => {
+              if (err) throw err;
+              console.log('The file has been saved!');
+            });
+          });
+
+					sendRecordsToAPI(changedUsers);
+
+        });
+      });
+    });
+  });
+}
+
+main();
