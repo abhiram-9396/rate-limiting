@@ -4,11 +4,11 @@ const {stringify} = require('csv-stringify');
 const fs = require('fs');
 
 let changedUsers = [];
-const BATCH_SIZE = 100;
-const MAX_REQUESTS_PER_SECOND = 5;
+const BATCH_SIZE = 200;
+const MAX_REQUESTS_PER_SECOND = 5000;
 let tokenBucket = MAX_REQUESTS_PER_SECOND;
-const yesterday_file = './assets/yesterday_users.csv';
-const todays_file = './assets/today_users.csv';
+const yesterday_file = './assets/maturity_store_segment_2023_03_23.csv';
+const todays_file = './assets/maturity_store_segment_[Leanplum_Attributes]_2023_03_26.csv';
 
 async function sendBatchToAPI(batch) {
   const config = {
@@ -48,48 +48,46 @@ async function sendRecordsToAPI(records) {
     await sendBatchToAPI(batches[i]);
     tokenBucket -= 1;
   }
+	console.log(`Program ended at ${new Date().toLocaleString()}`);
 }
 
 async function main() {
 
+	console.log(`Program started at ${new Date().toLocaleString()}`);
   fs.readFile(yesterday_file, 'utf8', (err, yesterdayData) => {
     if (err) throw err;
-  
+		
     parse(yesterdayData, { columns: true }, (err, yesterdayUsers) => {
       if (err) throw err;
-  
+			
       fs.readFile(todays_file, 'utf8', (err, todayData) => {
         if (err) throw err;
-  
+				
         parse(todayData, { columns: true }, (err, todayUsers) => {
           if (err) throw err;
-  
+					
           for (let i = 0; i < todayUsers.length; i++) {
             const todayUser = todayUsers[i];
             const yesterdayUser = yesterdayUsers.find(
-              (user) => user.storeId === todayUser.storeId
+              (user) => user.user_id === todayUser.user_id
             );
             if (
               !yesterdayUser ||
-              todayUser.city !== yesterdayUser.city ||
-              todayUser.state !== yesterdayUser.state ||
-              todayUser.province !== yesterdayUser.province ||
-              todayUser.pincode !== yesterdayUser.pincode
+              todayUser.toString() != yesterdayUser.toString()
             ) {
               changedUsers.push(todayUser);
             }
           }
-  
+					
           stringify(changedUsers, { header: true }, (err, output) => {
             if (err) throw err;
-            fs.writeFile('./assets/changed_values.csv', output, (err) => {
+            fs.writeFile('./assets/changed_values_prod.csv', output, (err) => {
               if (err) throw err;
               console.log('The file has been saved!');
             });
           });
-
+					
 					sendRecordsToAPI(changedUsers);
-
         });
       });
     });
